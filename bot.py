@@ -6,6 +6,33 @@ import random
 import io
 import re
 import time
+
+import hmac
+import hashlib
+from urllib.parse import parse_qsl
+
+import sqlite3
+
+DB_PATH = os.getenv("DB_PATH", "events.db")
+
+db = sqlite3.connect(DB_PATH, check_same_thread=False)
+db.row_factory = sqlite3.Row
+cur = db.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id INTEGER,
+    event_type TEXT,
+    author TEXT,
+    content TEXT,
+    old_content TEXT,
+    timestamp INTEGER
+)
+""")
+
+db.commit()
+
 from html import escape
 from typing import Any, Dict, List, Optional, Tuple
 from difflib import SequenceMatcher
@@ -30,6 +57,9 @@ from aiogram.types import (
 )
 
 from config import BOT_TOKEN, REQUIRED_CHANNEL, REQUIRED_CHANNEL_URL, WEBAPP_URL
+
+LIVE_CLIENTS: dict[int, list[web.StreamResponse]] = {}
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -61,6 +91,129 @@ def switch_layout(text: str) -> str:
 
 def is_kawaii(user_id: Optional[int]) -> bool:
     return bool(user_id and KAWAII_MODE.get(user_id))
+
+def verify_telegram_init_data(init_data: str, bot_token: str) -> bool:
+    """
+    Проверяет, что запрос пришёл от Telegram Mini App
+    """
+    try:
+        data = dict(parse_qsl(init_data, strict_parsing=True))
+        received_hash = data.pop("hash")
+
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+
+        secret_key = hashlib.sha256(bot_token.encode()).digest()
+        calculated_hash = hmac.new(
+            secret_key,
+            data_check_string.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        return hmac.compare_digest(calculated_hash, received_hash)
+    except Exception:
+        return False
+
+async def api_messages(request: web.Request):
+    data = await request.json()
+
+    init_data = data.get("initData")
+    user_id = data.get("user_id")
+
+    # 🔐 Защита
+    if not init_data or not verify_telegram_init_data(init_data, BOT_TOKEN):
+        return web.json_response({"error": "unauthorized"}, status=403)
+
+    cur.execute(
+        """
+        SELECT event_type, author, content, old_content, timestamp
+        FROM events
+        WHERE owner_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 500
+        """,
+        (user_id,)
+    )
+
+    rows = cur.fetchall()
+
+    return web.json_response({
+        "messages": [
+            {
+                "type": r["event_type"],
+                "author": r["author"],
+                "content": r["content"],
+                "old_content": r["old_content"],
+                "timestamp": r["timestamp"],
+            }
+            for r in rows
+        ]
+    })
+
+async def api_events_stream(request: web.Request):
+    params = request.rel_url.query
+    user_id = int(params.get("user_id", 0))
+    init_data = params.get("initData")
+
+    if not verify_telegram_init_data(init_data, BOT_TOKEN):
+        return web.Response(status=403)
+
+    resp = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+    await resp.prepare(request)
+
+    LIVE_CLIENTS.setdefault(user_id, []).append(resp)
+
+    try:
+        while True:
+            await asyncio.sleep(60)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        LIVE_CLIENTS[user_id].remove(resp)
+
+    return resp
+
+async def api_events_stream_handler(request: web.Request) -> web.StreamResponse:
+    user_id = request.rel_url.query.get("user_id")
+    init_data = request.rel_url.query.get("initData")
+
+    if not user_id or not init_data:
+        return web.Response(status=400)
+
+    if not verify_telegram_init_data(init_data, BOT_TOKEN):
+        return web.Response(status=403)
+
+    try:
+        user_id = int(user_id)
+    except Exception:
+        return web.Response(status=400)
+
+    resp = web.StreamResponse(
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+    await resp.prepare(request)
+
+    LIVE_CLIENTS.setdefault(user_id, []).append(resp)
+
+    try:
+        while True:
+            await asyncio.sleep(60)
+    finally:
+        LIVE_CLIENTS[user_id].remove(resp)
+
+    return resp
 
 
 def kawaiify(text: str) -> str:
@@ -680,24 +833,68 @@ def format_text_diff(old_text: str, new_text: str) -> str:
     return "".join(result_parts)
 
 
-def save_event(owner_id: int, event_type: str, author: str, content: str, old_content: Optional[str] = None) -> None:
-    """Сохранить событие в историю для мини-приложения."""
-    if owner_id not in EVENTS_HISTORY:
-        EVENTS_HISTORY[owner_id] = []
-    
+def save_event(
+    owner_id: int,
+    event_type: str,
+    author: str,
+    content: str,
+    old_content: Optional[str] = None
+) -> None:
+    """
+    Сохраняет событие:
+    - в памяти (EVENTS_HISTORY)
+    - в базе данных (SQLite / PostgreSQL)
+    - пушит live-обновление (если есть клиенты)
+    """
+
+    ts = int(time.time())
+
+    # ========= 1. ПАМЯТЬ (совместимость, ничего не ломаем) =========
+    history = EVENTS_HISTORY.setdefault(owner_id, [])
+
     event = {
         "type": event_type,
         "author": author,
         "content": content,
         "old_content": old_content,
-        "timestamp": int(time.time()),
+        "timestamp": ts,
     }
-    
-    EVENTS_HISTORY[owner_id].append(event)
-    
-    # Ограничиваем историю последними 1000 событиями
-    if len(EVENTS_HISTORY[owner_id]) > 1000:
-        EVENTS_HISTORY[owner_id] = EVENTS_HISTORY[owner_id][-1000:]
+
+    history.append(event)
+
+    # ограничение истории
+    if len(history) > 1000:
+        del history[:-1000]
+
+    # ========= 2. БАЗА ДАННЫХ =========
+    try:
+        _cur.execute(
+            """
+            INSERT INTO events
+            (owner_id, event_type, author, content, old_content, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                owner_id,
+                event_type,
+                author,
+                content,
+                old_content,
+                ts,
+            )
+        )
+        _db.commit()
+    except Exception as e:
+        logging.exception("save_event: DB error")
+
+    # ========= 3. LIVE-ОБНОВЛЕНИЕ (НЕ БЛОКИРУЕТ БОТА) =========
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(push_live_event(owner_id, event))
+    except RuntimeError:
+        # если loop ещё не запущен (например, при старте)
+        pass
+
 
 
 def remember_message(message: types.Message) -> None:
@@ -2194,39 +2391,52 @@ async def on_callback_check_sub(callback: types.CallbackQuery) -> None:
 
 # HTTP сервер для мини-приложения
 async def api_messages_handler(request: web.Request) -> web.Response:
-    """API эндпоинт для получения истории сообщений."""
     try:
         data = await request.json()
-        user_id = data.get('user_id')
-        
-        if not user_id:
-            return web.json_response({'error': 'user_id required'}, status=400)
-        
-        # Получаем историю событий для пользователя
-        events = EVENTS_HISTORY.get(user_id, [])
-        
-        # Преобразуем в формат для фронтенда
-        messages = []
-        for event in events:
-            messages.append({
-                'type': event['type'],
-                'author': event['author'],
-                'content': event['content'],
-                'old_content': event.get('old_content'),
-                'timestamp': event['timestamp'],
-            })
-        
-        response = web.json_response({'messages': messages})
-        # Добавляем CORS заголовки для работы с Telegram WebApp
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        return response
+    except Exception:
+        return web.json_response({"messages": []})
+
+    init_data = data.get("initData")
+    user_id = data.get("user_id")
+
+    # 🔐 Защита Telegram Mini App
+    if not init_data or not verify_telegram_init_data(init_data, BOT_TOKEN):
+        return web.json_response({"error": "unauthorized"}, status=403)
+
+    try:
+        user_id = int(user_id)
+    except Exception:
+        return web.json_response({"messages": []})
+
+    # 📦 ЧТЕНИЕ ИЗ БД
+    try:
+        _cur.execute(
+            """
+            SELECT event_type, author, content, old_content, timestamp
+            FROM events
+            WHERE owner_id = ?
+            ORDER BY timestamp DESC
+            LIMIT 500
+            """,
+            (user_id,)
+        )
+        rows = _cur.fetchall()
     except Exception as e:
-        logging.error(f"API error: {e}")
-        response = web.json_response({'error': str(e)}, status=500)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        return response
+        logging.error(f"DB read error: {e}")
+        rows = []
+
+    return web.json_response({
+        "messages": [
+            {
+                "type": r["event_type"],
+                "author": r["author"],
+                "content": r["content"],
+                "old_content": r["old_content"],
+                "timestamp": r["timestamp"],
+            }
+            for r in rows
+        ]
+    })
 
 
 @web.middleware
@@ -2274,6 +2484,7 @@ async def start_http_server(port: Optional[int] = None) -> None:
     # API эндпоинты
     app.router.add_post('/api/messages', api_messages_handler)
     app.router.add_options('/api/messages', api_messages_handler)
+    app.router.add_get('/api/events/stream', api_events_stream_handler)
     
     # Статические файлы
     app.router.add_get('/', static_handler)
