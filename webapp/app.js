@@ -1,11 +1,21 @@
-// Telegram WebApp API
+// ================================
+// Telegram WebApp
+// ================================
 const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
 
-const themes = ["dark", "light", "liquid"];
-let currentThemeIndex = 0;
+const INIT_DATA = tg.initData;
+const USER_ID = tg.initDataUnsafe?.user?.id || null;
+
+// ================================
+// THEME SYSTEM
+// ================================
+const THEMES = ["dark", "light", "liquid"];
+let themeIndex = 0;
 
 function applyTheme(theme) {
-    document.body.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
 
     const icon = document.querySelector(".theme-icon");
@@ -15,216 +25,156 @@ function applyTheme(theme) {
             theme === "light" ? "☀️" :
             "🫧";
     }
+
+    if (tg.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred("light");
+    }
+}
+
+function initTheme() {
+    const saved = localStorage.getItem("theme") || "liquid";
+    themeIndex = THEMES.indexOf(saved);
+    if (themeIndex === -1) themeIndex = 0;
+    applyTheme(THEMES[themeIndex]);
 }
 
 function toggleTheme() {
-    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
-    applyTheme(themes[currentThemeIndex]);
+    document.body.classList.add("theme-switching");
+
+    themeIndex = (themeIndex + 1) % THEMES.length;
+    applyTheme(THEMES[themeIndex]);
+
+    setTimeout(() => {
+        document.body.classList.remove("theme-switching");
+    }, 600);
 }
 
-tg.ready();
-tg.expand();
 
-// Оптимизация размеров для Telegram WebApp
-if (tg && tg.viewportHeight) {
-    document.documentElement.style.setProperty('--tg-viewport-height', `${tg.viewportHeight}px`);
-    tg.onEvent('viewportChanged', () => {
-        document.documentElement.style.setProperty('--tg-viewport-height', `${tg.viewportHeight}px`);
-    });
-}
-
-// Устанавливаем цвет фона в соответствии с темой Telegram
-if (tg && tg.colorScheme) {
-    const isDark = tg.colorScheme === 'dark';
-    if (isDark) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-    }
-    updateThemeIcon(isDark ? 'dark' : 'light');
-}
-
-// State
+// ================================
+// STATE
+// ================================
 let messagesData = [];
 let filteredData = [];
 
-// Theme management
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
-}
-
-function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    updateThemeIcon(newTheme);
-    
-    // Haptic feedback
-    if (tg && tg.HapticFeedback) {
-        tg.HapticFeedback.impactOccurred('light');
-    }
-}
-
-function updateThemeIcon(theme) {
-    const icon = document.querySelector('.theme-icon');
-    if (icon) {
-        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-    }
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', async () => {
+// ================================
+// INIT
+// ================================
+document.addEventListener("DOMContentLoaded", async () => {
     initTheme();
-    await loadData();
+
+    try {
+        await loadData();
+    } catch (e) {
+        console.error("loadData failed", e);
+    }
+
     updateStats();
     renderMessages();
-
     initLiveUpdates();
 });
 
-function initLiveUpdates() {
-    const tg = window.Telegram.WebApp;
-    const userId = tg.initDataUnsafe?.user?.id;
-    const initData = tg.initData;
+// ================================
+// API LOAD
+// ================================
+async function loadData() {
+    const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Telegram-Init-Data": INIT_DATA,
+        },
+        body: JSON.stringify({ user_id: USER_ID }),
+    });
 
-    if (!userId || !initData) return;
+    if (!res.ok) throw new Error("API error");
+
+    const data = await res.json();
+    messagesData = data.messages || [];
+    filteredData = messagesData;
+}
+
+// ================================
+// LIVE UPDATES (SSE)
+// ================================
+function initLiveUpdates() {
+    if (!USER_ID || !INIT_DATA) return;
 
     const es = new EventSource(
-        `/api/events/stream?user_id=${userId}&initData=${encodeURIComponent(initData)}`
+        `/api/events/stream?user_id=${USER_ID}&initData=${encodeURIComponent(INIT_DATA)}`
     );
 
     es.onmessage = (e) => {
         try {
             const event = JSON.parse(e.data);
             messagesData.unshift(event);
+            filteredData = messagesData;
             updateStats();
             renderMessages();
         } catch (err) {
-            console.error("Live event error:", err);
+            console.error("SSE error", err);
         }
     };
 
     es.onerror = () => {
-        console.warn("Live connection lost, retrying...");
         es.close();
         setTimeout(initLiveUpdates, 3000);
     };
 }
 
-
-// Load data from bot API
-async function loadData() {
-    try {
-        // Используем относительный URL для API (будет работать через прокси или на том же домене)
-        const apiUrl = window.location.origin + '/api/messages';
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                user_id: tg.initDataUnsafe?.user?.id || null,
-            }),
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to load data');
-        }
-        
-        const data = await response.json();
-        messagesData = data.messages || [];
-        filteredData = messagesData;
-        
-        document.getElementById('loading').style.display = 'none';
-    } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('loading').textContent = 'Ошибка загрузки данных';
-    }
-}
-
-// Update statistics
+// ================================
+// STATS
+// ================================
 function updateStats() {
-    const total = messagesData.length;
-    const edited = messagesData.filter(m => m.type === 'edited').length;
-    const deleted = messagesData.filter(m => m.type === 'deleted').length;
-    
-    document.getElementById('totalMessages').textContent = total;
-    document.getElementById('editedMessages').textContent = edited;
-    document.getElementById('deletedMessages').textContent = deleted;
+    document.getElementById("totalMessages").textContent = messagesData.length;
+    document.getElementById("editedMessages").textContent =
+        messagesData.filter(m => m.type === "edited").length;
+    document.getElementById("deletedMessages").textContent =
+        messagesData.filter(m => m.type === "deleted").length;
 }
 
-// Apply filters
-function applyFilters() {
-    const period = document.getElementById('periodFilter').value;
-    const type = document.getElementById('typeFilter').value;
-    
-    filteredData = messagesData.filter(msg => {
-        // Period filter
-        if (period !== 'all') {
-            const msgDate = new Date(msg.timestamp * 1000);
-            const now = new Date();
-            const diff = now - msgDate;
-            
-            switch (period) {
-                case 'today':
-                    if (diff > 24 * 60 * 60 * 1000) return false;
-                    break;
-                case 'week':
-                    if (diff > 7 * 24 * 60 * 60 * 1000) return false;
-                    break;
-                case 'month':
-                    if (diff > 30 * 24 * 60 * 60 * 1000) return false;
-                    break;
-            }
-        }
-        
-        // Type filter
-        if (type !== 'all' && msg.type !== type) {
-            return false;
-        }
-        
-        return true;
-    });
-    
-    renderMessages();
-}
-
-// Render messages
+// ================================
+// RENDER
+// ================================
 function renderMessages() {
-    const container = document.getElementById('messagesContainer');
-    
-    if (filteredData.length === 0) {
-        container.innerHTML = `
+    const el = document.getElementById("messagesContainer");
+
+    if (!filteredData.length) {
+        el.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">📭</div>
-                <p>Нет данных для отображения</p>
-            </div>
-        `;
+                <p>Нет данных</p>
+            </div>`;
         return;
     }
-    
-    container.innerHTML = filteredData.map(msg => {
-        const date = new Date(msg.timestamp * 1000).toLocaleString('ru-RU');
-        const typeClass = msg.type === 'edited' ? 'edited' : 'deleted';
-        const typeText = msg.type === 'edited' ? '✏️ Изменено' : '🗑️ Удалено';
-        
+
+    el.innerHTML = filteredData.map(msg => {
+        const date = new Date(msg.timestamp * 1000).toLocaleString("ru-RU");
+        const label = msg.type === "edited" ? "✏️ Изменено" : "🗑️ Удалено";
+        const cls = msg.type === "edited" ? "edited" : "deleted";
+
         return `
-            <div class="message-item">
-                <div class="message-header">
-                    <span class="message-type ${typeClass}">${typeText}</span>
-                    <span class="message-date">${date}</span>
-                </div>
-                <div class="message-content">
-                    <span class="message-author">${msg.author}</span><br>
-                    ${msg.content ? escapeHtml(msg.content) : '<em>Нет текста</em>'}
-                </div>
+        <div class="message-item glass">
+            <div class="message-header">
+                <span class="message-type ${cls}">${label}</span>
+                <span class="message-date">${date}</span>
             </div>
-        `;
-    }).join('');
+            <div class="message-content">
+                <b>${escapeHtml(msg.author)}</b><br>
+                ${msg.content ? escapeHtml(msg.content) : "<em>Нет текста</em>"}
+            </div>
+        </div>`;
+    }).join("");
 }
+
+// ================================
+// UTILS
+// ================================
+function escapeHtml(text) {
+    const d = document.createElement("div");
+    d.textContent = text;
+    return d.innerHTML;
+}
+
 
 // Export data
 function exportData(format) {
@@ -288,8 +238,3 @@ function downloadFile(content, filename, mimeType) {
     URL.revokeObjectURL(url);
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
