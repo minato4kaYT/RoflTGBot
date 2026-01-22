@@ -903,11 +903,11 @@ def get_rofl_inline_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎭 Ещё рофл",
+                    text="🎭 Ещё шутка",
                     callback_data="more_rofl",
                 ),
                 InlineKeyboardButton(
-                    text="🖤 Черные рофлы",
+                    text="🖤 Черные шутки",
                     callback_data="dark_rofl",
                 ),
             ]
@@ -921,11 +921,11 @@ def get_dark_rofl_inline_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🖤 Ещё черный рофл",
+                    text="🖤 Ещё черную шутку",
                     callback_data="more_dark_rofl",
                 ),
                 InlineKeyboardButton(
-                    text="🎭 Обычные рофлы",
+                    text="🎭 Обычные шутки",
                     callback_data="more_rofl",
                 ),
             ]
