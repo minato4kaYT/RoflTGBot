@@ -13,6 +13,7 @@ from aiohttp import web
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command
 from aiogram.types import (
@@ -1024,31 +1025,120 @@ async def cmd_help(message: types.Message) -> None:
     remember_message(message)
 
     help_text = (
-        "🤖 <b>Rofl Bot — помощь</b>\n\n"
-        
-        "🎭 <b>Пранк-команды:</b>\n"
+        "🤖 <b>EternalMod — Центр помощи</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+
+        "🎭 <b>Пранк-команды</b>\n"
         "• <b>/rofl</b> — случайный рофл\n"
-        "• <b>/mock &lt;текст&gt;</b> — передразнить в стиле SpongeBob\n"
+        "• <b>/mock &lt;текст&gt;</b> — передразнить (SpongeBob)\n"
         "• <b>/coin</b> — орёл или решка\n\n"
-        
-        "🕵️ <b>Бизнес-функции (PRO):</b>\n"
+
+        "🕵️ <b>Бизнес-функции (PRO)</b>\n"
         "• Просмотр <b>удалённых сообщений</b>\n"
         "• Просмотр <b>изменённых сообщений</b>\n"
-        "• Логи действий в чате\n\n"
-        
-        "⚠️ <b>Важно:</b>\n"
-        "• Требуется <b>подписка на канал</b>\n"
-        "• Бот должен быть <b>подключён как бизнес-бот</b>\n"
-        "• Должны быть выданы права на <b>управление сообщениями</b>\n\n"
-        
-        "📎 <b>Полезно:</b>\n"
-        "• <b>/instruction</b> — как подключить бота как бизнес-бота\n"
-        "• Просто напиши текст — получишь рофл-эхо 😏"
+        "• Логи действий в чатах\n\n"
+
+        "⚠️ <b>Требования для PRO:</b>\n"
+        "• Подписка на канал\n"
+        "• Подключение как <b>бизнес-бот</b>\n"
+        "• Права на <b>управление сообщениями</b>\n\n"
+
+        "📎 <b>Навигация:</b>\n"
+        "Используй кнопки ниже для быстрого доступа 👇"
+    )
+
+    help_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📖 Инструкция",
+                    callback_data="quick_instruction",
+                ),
+                InlineKeyboardButton(
+                    text="📢 Канал",
+                    url=REQUIRED_CHANNEL_URL,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🎭 Рофл",
+                    callback_data="quick_rofl",
+                ),
+                InlineKeyboardButton(
+                    text="🪙 Монетка",
+                    callback_data="quick_coin",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📊 Дашборд",
+                    web_app=WebAppInfo(url=WEBAPP_URL),
+                ),
+            ],
+        ]
     )
 
     await message.answer(
         help_text,
-        reply_markup=MAIN_KEYBOARD,
+        reply_markup=help_keyboard,
+    )
+
+async def cmd_about(message: types.Message) -> None:
+    about_text = (
+        "🤖 <b>ROFL BOT</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+
+        "🎯 <b>Назначение:</b>\n"
+        "EternalMod — это пранк и бизнес-бот,\n"
+        "который помогает:\n"
+        "• Развлекаться\n"
+        "• Контролировать переписку\n"
+        "• Видеть то, что пытаются скрыть\n\n"
+
+        "🧩 <b>Основные возможности:</b>\n"
+        "• Пранк-команды\n"
+        "• Эхо-ответы с подколом\n"
+        "• Просмотр удалённых сообщений\n"
+        "• Просмотр изменённых сообщений\n\n"
+
+        "🔐 <b>Ограничения:</b>\n"
+        "Некоторые функции доступны только при:\n"
+        "• Подписке на канал\n"
+        "• Подключении как бизнес-бот\n"
+        "• Выдаче прав на управление сообщениями\n\n"
+
+        "🛡 <b>Важно:</b>\n"
+        "Бот работает только в рамках\n"
+        "разрешений Telegram.\n"
+        "Никакого взлома или скрытого доступа.\n\n"
+
+        "😎 <b>EternalMod</b> — юмор + контроль."
+    )
+
+    about_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📖 Инструкция",
+                    callback_data="quick_instruction",
+                ),
+                InlineKeyboardButton(
+                    text="❓ Помощь",
+                    callback_data="quick_help",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📢 Канал",
+                    url=REQUIRED_CHANNEL_URL,
+                ),
+            ],
+        ]
+    )
+
+    await message.answer(
+        about_text,
+        reply_markup=about_keyboard,
     )
 
 
@@ -2221,6 +2311,7 @@ async def main() -> None:
     dp.message.register(cmd_coin, Command("coin"))
     dp.message.register(cmd_instruction, Command("instruction"))
     dp.message.register(cmd_commands_description, Command("commands"))
+    dp.message.register(cmd_about, Command("about"))
     dp.business_message.register(on_business_message)
     dp.edited_business_message.register(on_edited_message)
     dp.business_connection.register(on_business_connection)
