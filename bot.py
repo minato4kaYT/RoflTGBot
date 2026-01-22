@@ -614,7 +614,7 @@ BUSINESS_CONNECTIONS_FILE = "business_connections.json"
 # Для отслеживания последнего уведомления о подписке (чтобы не спамить)
 # owner_id -> timestamp последнего уведомления
 LAST_SUBSCRIPTION_NOTIFICATION: Dict[int, float] = {}
-SUBSCRIPTION_NOTIFICATION_COOLDOWN = 10  # 1 час в секундах
+SUBSCRIPTION_NOTIFICATION_COOLDOWN = 3600  # 1 час в секундах
 # История событий для мини-приложения: owner_id -> List[Dict]
 EVENTS_HISTORY: Dict[int, List[Dict[str, Any]]] = {}
 
