@@ -183,17 +183,17 @@ function exportData(format) {
     switch (format) {
         case 'csv':
             content = exportToCSV(data);
-            filename = `rofl_bot_export_${Date.now()}.csv`;
+            filename = `eternalmod_export_${Date.now()}.csv`;
             mimeType = 'text/csv';
             break;
         case 'json':
             content = JSON.stringify(data, null, 2);
-            filename = `rofl_bot_export_${Date.now()}.json`;
+            filename = `eternalmod_export_${Date.now()}.json`;
             mimeType = 'application/json';
             break;
         case 'txt':
             content = exportToTXT(data);
-            filename = `rofl_bot_export_${Date.now()}.txt`;
+            filename = `eternalmodexport_${Date.now()}.txt`;
             mimeType = 'text/plain';
             break;
     }
