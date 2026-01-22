@@ -1,5 +1,27 @@
 // Telegram WebApp API
 const tg = window.Telegram.WebApp;
+
+const themes = ["dark", "light", "liquid"];
+let currentThemeIndex = 0;
+
+function applyTheme(theme) {
+    document.body.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+
+    const icon = document.querySelector(".theme-icon");
+    if (icon) {
+        icon.textContent =
+            theme === "dark" ? "🌙" :
+            theme === "light" ? "☀️" :
+            "🫧";
+    }
+}
+
+function toggleTheme() {
+    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+    applyTheme(themes[currentThemeIndex]);
+}
+
 tg.ready();
 tg.expand();
 
@@ -59,7 +81,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadData();
     updateStats();
     renderMessages();
+
+    initLiveUpdates();
 });
+
+function initLiveUpdates() {
+    const tg = window.Telegram.WebApp;
+    const userId = tg.initDataUnsafe?.user?.id;
+    const initData = tg.initData;
+
+    if (!userId || !initData) return;
+
+    const es = new EventSource(
+        `/api/events/stream?user_id=${userId}&initData=${encodeURIComponent(initData)}`
+    );
+
+    es.onmessage = (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            messagesData.unshift(event);
+            updateStats();
+            renderMessages();
+        } catch (err) {
+            console.error("Live event error:", err);
+        }
+    };
+
+    es.onerror = () => {
+        console.warn("Live connection lost, retrying...");
+        es.close();
+        setTimeout(initLiveUpdates, 3000);
+    };
+}
+
 
 // Load data from bot API
 async function loadData() {

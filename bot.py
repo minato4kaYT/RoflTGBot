@@ -832,6 +832,31 @@ def format_text_diff(old_text: str, new_text: str) -> str:
     
     return "".join(result_parts)
 
+async def push_live_event(owner_id: int, event: dict) -> None:
+    """
+    Отправляет событие всем подключённым Mini App клиентам (SSE)
+    """
+    clients = LIVE_CLIENTS.get(owner_id)
+    if not clients:
+        return
+
+    dead = []
+
+    for resp in clients:
+        try:
+            await resp.write(
+                f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode()
+            )
+        except Exception:
+            dead.append(resp)
+
+    # чистим мёртвые соединения
+    for resp in dead:
+        try:
+            clients.remove(resp)
+        except ValueError:
+            pass
+
 
 def save_event(
     owner_id: int,
