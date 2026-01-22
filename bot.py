@@ -15,11 +15,11 @@ import sqlite3
 
 DB_PATH = os.getenv("DB_PATH", "events.db")
 
-db = sqlite3.connect(DB_PATH, check_same_thread=False)
-db.row_factory = sqlite3.Row
-cur = db.cursor()
+_db = sqlite3.connect("events.db", check_same_thread=False)
+_db.row_factory = sqlite3.Row
+_cur = _db.cursor()
 
-cur.execute("""
+_cur.execute("""
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner_id INTEGER,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS events (
 )
 """)
 
-db.commit()
+_db.commit()
 
 from html import escape
 from typing import Any, Dict, List, Optional, Tuple
@@ -865,12 +865,7 @@ def save_event(
     content: str,
     old_content: Optional[str] = None
 ) -> None:
-    """
-    Сохраняет событие:
-    - в памяти (EVENTS_HISTORY)
-    - в базе данных (SQLite / PostgreSQL)
-    - пушит live-обновление (если есть клиенты)
-    """
+    global _cur, _db
 
     ts = int(time.time())
 
@@ -909,7 +904,7 @@ def save_event(
             )
         )
         _db.commit()
-    except Exception as e:
+    except Exception:
         logging.exception("save_event: DB error")
 
     # ========= 3. LIVE-ОБНОВЛЕНИЕ (НЕ БЛОКИРУЕТ БОТА) =========
@@ -917,8 +912,8 @@ def save_event(
         loop = asyncio.get_running_loop()
         loop.create_task(push_live_event(owner_id, event))
     except RuntimeError:
-        # если loop ещё не запущен (например, при старте)
         pass
+
 
 
 
