@@ -12,7 +12,7 @@ dist/
 build/
 
 # Config
-config.py
+# config.py - теперь загружается в репозиторий (для упрощения развертывания)
 .env
 *.env
 

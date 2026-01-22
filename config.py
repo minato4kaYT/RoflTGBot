@@ -17,4 +17,4 @@ REQUIRED_CHANNEL_URL = os.getenv("REQUIRED_CHANNEL_URL", "https://t.me/qqgram_ne
 
 # URL мини-приложения (веб-приложения) для Telegram
 # Для продакшена укажите ваш домен (Railway автоматически создаст URL)
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://jesica-uncarburetted-unholy.ngrok-free.dev/")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://rofl-bot-production.up.railway.app/")
