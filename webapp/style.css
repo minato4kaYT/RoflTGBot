@@ -1,7 +1,6 @@
 /* =====================================================
    RESET
 ===================================================== */
-
 * {
     margin: 0;
     padding: 0;
@@ -10,11 +9,9 @@
 }
 
 /* =====================================================
-   THEME VARIABLES (SINGLE SOURCE OF TRUTH)
+   THEME VARIABLES
 ===================================================== */
-
 :root {
-    /* Dark (default) */
     --bg-gradient-start: #1a1a2e;
     --bg-gradient-mid: #16213e;
     --bg-gradient-end: #0f3460;
@@ -26,366 +23,137 @@
     --text-primary: #ffffff;
     --text-secondary: rgba(255, 255, 255, 0.75);
 
-    --accent: #8b5cf6;
-    --accent-hover: #a78bfa;
-
-    --stat-bg: rgba(139, 92, 246, 0.15);
-    --message-bg: rgba(255, 255, 255, 0.05);
-    --message-border: rgba(255, 255, 255, 0.08);
+    --accent: #A277FF;
+    --accent-hover: #CBA0FF;
 
     --blur: 22px;
 }
 
-/* LIGHT */
-[data-theme="light"] {
-    --bg-gradient-start: #f5f7fa;
-    --bg-gradient-mid: #eef2f6;
-    --bg-gradient-end: #e5ebf0;
-
-    --glass-bg: rgba(255, 255, 255, 0.75);
-    --glass-border: rgba(0, 0, 0, 0.08);
-    --glass-shadow: rgba(0, 0, 0, 0.08);
-
-    --text-primary: #1d1d1f;
-    --text-secondary: rgba(29, 29, 31, 0.65);
-
-    --accent: #007aff;
-    --accent-hover: #0051d5;
-
-    --stat-bg: rgba(0, 122, 255, 0.12);
-    --message-bg: rgba(255, 255, 255, 0.8);
-    --message-border: rgba(0, 0, 0, 0.06);
-}
-
-/* LIQUID GLASS (iOS / visionOS) */
-[data-theme="liquid"] {
-    --bg-gradient-start: #0b1020;
-    --bg-gradient-mid: #090d1a;
-    --bg-gradient-end: #05070f;
-
-    --glass-bg: linear-gradient(
-        135deg,
-        rgba(255,255,255,0.22),
-        rgba(255,255,255,0.06)
-    );
-    --glass-border: rgba(255,255,255,0.35);
-    --accent: #6ee7ff;
-    --blur: 36px;
-}
-
 /* =====================================================
-   BODY & BACKGROUND
+   BODY
 ===================================================== */
-
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
-                 "SF Pro Display", "Segoe UI", Roboto, Arial, sans-serif;
-
-    background: linear-gradient(
-        135deg,
-        var(--bg-gradient-start),
-        var(--bg-gradient-mid),
-        var(--bg-gradient-end)
-    );
-    background-attachment: fixed;
-
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-mid), var(--bg-gradient-end));
     min-height: 100vh;
     color: var(--text-primary);
     overflow-x: hidden;
-
     transition: background 0.5s ease, color 0.3s ease;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
 }
 
 /* =====================================================
    CONTAINER
 ===================================================== */
-
 .container {
     width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 16px;
+    max-width: 420px;
 }
 
 /* =====================================================
-   GLASS BASE
+   GLASS CARD BASE
 ===================================================== */
-
 .glass-card,
 .glass-header,
-.glass-input,
 .stat-card,
-.message-item {
+.filter-section {
     background: var(--glass-bg);
     backdrop-filter: blur(var(--blur)) saturate(180%);
     -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-
-    border-radius: 22px;
+    border-radius: 16px;
     border: 0.5px solid var(--glass-border);
-
-    box-shadow:
-        0 12px 40px var(--glass-shadow),
-        inset 0 1px 0 rgba(255,255,255,0.15);
-
-    transition: transform .3s ease, box-shadow .3s ease;
+    box-shadow: 0 12px 40px var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
-
 .glass-card:hover,
 .stat-card:hover,
-.message-item:hover {
+.filter-section:hover {
     transform: translateY(-2px);
 }
 
 /* =====================================================
    HEADER
 ===================================================== */
-
 .glass-header {
     padding: 24px 20px;
     text-align: center;
     margin-bottom: 20px;
 }
-
 .glass-header h1 {
-    font-size: 2.2em;
+    font-size: 1.8em;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
-
 .subtitle {
-    font-size: 1em;
+    font-size: 0.95em;
     color: var(--text-secondary);
 }
 
 /* =====================================================
-   STATS
+   STATS GRID
 ===================================================== */
-
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     margin-bottom: 20px;
 }
-
 .stat-card {
-    padding: 20px 16px;
+    padding: 16px 8px;
     text-align: center;
+    cursor: default;
 }
-
+.stat-card img {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 6px;
+}
 .stat-value {
-    font-size: 2.2em;
+    font-size: 1.6em;
     font-weight: 700;
     color: var(--accent);
 }
-
 .stat-label {
-    font-size: 0.8em;
+    font-size: 0.75em;
     color: var(--text-secondary);
 }
 
 /* =====================================================
-   MESSAGES
+   FILTER SECTION
 ===================================================== */
-
-.message-item {
-    padding: 20px;
-    margin-bottom: 16px;
-    background: var(--message-bg);
-    border: 0.5px solid var(--message-border);
+.filter-section {
+    padding: 16px;
+    margin-bottom: 20px;
 }
-
-.message-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
-}
-
-.message-type {
-    font-size: 0.85em;
-    font-weight: 600;
-}
-
-.message-type.edited {
-    color: var(--accent);
-}
-
-.message-type.deleted {
-    color: #f87171;
-}
-
-.message-date {
-    font-size: 0.9em;
+.filter-section label {
+    font-size: 0.75em;
     color: var(--text-secondary);
+    display: block;
+    margin-bottom: 6px;
 }
-
-/* =====================================================
-   BUTTONS
-===================================================== */
-
-.btn-glass {
+.filter-section select {
     width: 100%;
-    padding: 14px;
-    border-radius: 14px;
+    padding: 8px 12px;
+    border-radius: 10px;
     border: none;
-
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+.filter-section button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
     background: var(--accent);
     color: #fff;
     font-weight: 600;
-
     cursor: pointer;
-    transition: transform .2s ease;
+    transition: background 0.3s ease, transform 0.2s ease;
 }
-
-.btn-glass:hover {
-    transform: translateY(-2px);
-}
-
-/* =====================================================
-   LIQUID NOISE
-===================================================== */
-
-[data-theme="liquid"]::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 999;
-}
-
-/* =========================================================
-   iOS LIQUID GLASS 2.0 — REAL APPLE STYLE
-   (SAFE LAYER, DOES NOT BREAK EXISTING CSS)
-========================================================= */
-
-/* ---------- Base glass refinement ---------- */
-.glass-card,
-.glass-header,
-.stat-card,
-.message-item {
-    position: relative;
-    isolation: isolate;
-}
-
-/* ---------- Liquid Glass Theme ---------- */
-[data-theme="liquid"] {
-    --liquid-bg: radial-gradient(
-        circle at top,
-        rgba(120,180,255,0.18),
-        rgba(20,25,40,0.95)
-    );
-
-    --liquid-glass: linear-gradient(
-        135deg,
-        rgba(255,255,255,0.22),
-        rgba(255,255,255,0.06)
-    );
-
-    --liquid-highlight: rgba(255,255,255,0.35);
-}
-
-body[data-theme="liquid"] {
-    background: var(--liquid-bg);
-}
-
-/* ---------- Liquid surface ---------- */
-body[data-theme="liquid"] .glass-card,
-body[data-theme="liquid"] .glass-header,
-body[data-theme="liquid"] .stat-card,
-body[data-theme="liquid"] .message-item {
-    background: var(--liquid-glass);
-    backdrop-filter: blur(34px) saturate(180%);
-    -webkit-backdrop-filter: blur(34px) saturate(180%);
-    box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.25),
-        inset 0 -1px 0 rgba(255,255,255,0.08),
-        0 20px 50px rgba(0,0,0,0.45);
-}
-
-/* ---------- Dynamic highlight ---------- */
-body[data-theme="liquid"] .glass-card::after,
-body[data-theme="liquid"] .stat-card::after,
-body[data-theme="liquid"] .message-item::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-        120% 80% at top left,
-        var(--liquid-highlight),
-        transparent 60%
-    );
-    opacity: 0.35;
-    pointer-events: none;
-    mix-blend-mode: overlay;
-}
-
-/* ---------- Subtle movement ---------- */
-@media (prefers-reduced-motion: no-preference) {
-    body[data-theme="liquid"] .glass-card,
-    body[data-theme="liquid"] .stat-card,
-    body[data-theme="liquid"] .message-item {
-        animation: liquidFloat 12s ease-in-out infinite;
-    }
-
-    @keyframes liquidFloat {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-3px); }
-    }
-}
-
-/* ---------- Noise (Apple style) ---------- */
-body[data-theme="liquid"]::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0.035;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* =========================================================
-   APPLE THEME SWITCH ANIMATION
-========================================================= */
-
-html {
-    transition: 
-        background-color 0.6s cubic-bezier(.22,1,.36,1),
-        color 0.4s ease;
-}
-
-body,
-.glass-card,
-.glass-header,
-.stat-card,
-.message-item,
-.btn-glass {
-    transition:
-        background-color 0.6s cubic-bezier(.22,1,.36,1),
-        color 0.4s ease,
-        box-shadow 0.6s cubic-bezier(.22,1,.36,1),
-        transform 0.5s cubic-bezier(.22,1,.36,1),
-        backdrop-filter 0.6s cubic-bezier(.22,1,.36,1);
-}
-
-/* Theme pulse */
-body.theme-switching::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(
-        circle at center,
-        rgba(255,255,255,0.15),
-        transparent 60%
-    );
-    animation: themePulse 0.6s ease-out;
-    pointer-events: none;
-    z-index: 9998;
-}
-
-@keyframes themePulse {
-    from { opacity: 0; }
-    40% { opacity: 1; }
-    to { opacity: 0; }
+.filter-section button:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
 }
