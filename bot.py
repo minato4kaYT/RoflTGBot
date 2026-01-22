@@ -1230,10 +1230,10 @@ async def cmd_start(message: types.Message) -> None:
     )
     
     # Отправляем reply-клавиатуру отдельным сообщением
-    await message.answer(
-        "👇 Или используй кнопки ниже:",
-        reply_markup=MAIN_KEYBOARD,
-    )
+    # await message.answer(
+    #     "👇 Или используй кнопки ниже:",
+    #     reply_markup=MAIN_KEYBOARD,
+    # )
 
 
 async def cmd_help(message: types.Message) -> None:
