@@ -30,4 +30,4 @@ build/
 Thumbs.db
 
 # Bot specific
-business_connections.json
+# business_connections.json
