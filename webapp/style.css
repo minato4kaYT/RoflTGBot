@@ -1,11 +1,18 @@
 /* =====================================================
    RESET
 ===================================================== */
-* {
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+    width: 100%;
+    min-height: 100%;
 }
 
 /* =====================================================
@@ -17,8 +24,8 @@
     --bg-gradient-end: #0f3460;
 
     --glass-bg: rgba(255, 255, 255, 0.08);
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --glass-shadow: rgba(0, 0, 0, 0.3);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-shadow: rgba(0, 0, 0, 0.35);
 
     --text-primary: #ffffff;
     --text-secondary: rgba(255, 255, 255, 0.75);
@@ -26,7 +33,7 @@
     --accent: #A277FF;
     --accent-hover: #CBA0FF;
 
-    --blur: 22px;
+    --blur: 20px;
 }
 
 /* =====================================================
@@ -34,14 +41,23 @@
 ===================================================== */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-mid), var(--bg-gradient-end));
-    min-height: 100vh;
+    background: linear-gradient(135deg,
+        var(--bg-gradient-start),
+        var(--bg-gradient-mid),
+        var(--bg-gradient-end)
+    );
     color: var(--text-primary);
     overflow-x: hidden;
-    transition: background 0.5s ease, color 0.3s ease;
+}
+
+/* =====================================================
+   APP WRAPPER (ВАЖНО)
+===================================================== */
+.app {
+    min-height: 100vh;
     display: flex;
     justify-content: center;
-    padding: 40px 16px;
+    padding: 24px 14px 40px;
 }
 
 /* =====================================================
@@ -50,44 +66,42 @@ body {
 .container {
     width: 100%;
     max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
 }
 
 /* =====================================================
-   GLASS CARD BASE
+   GLASS BASE
 ===================================================== */
 .glass-card,
 .glass-header,
 .stat-card,
 .filter-section {
     background: var(--glass-bg);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    border-radius: 16px;
-    border: 0.5px solid var(--glass-border);
-    box-shadow: 0 12px 40px var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.15);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-.glass-card:hover,
-.stat-card:hover,
-.filter-section:hover {
-    transform: translateY(-2px);
+    backdrop-filter: blur(var(--blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
+    border-radius: 18px;
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 10px 30px var(--glass-shadow);
 }
 
 /* =====================================================
    HEADER
 ===================================================== */
 .glass-header {
-    padding: 24px 20px;
+    padding: 22px 18px;
     text-align: center;
-    margin-bottom: 20px;
 }
+
 .glass-header h1 {
-    font-size: 1.8em;
+    font-size: 1.6rem;
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
+
 .subtitle {
-    font-size: 0.95em;
+    font-size: 0.9rem;
     color: var(--text-secondary);
 }
 
@@ -98,25 +112,27 @@ body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    margin-bottom: 20px;
 }
+
 .stat-card {
     padding: 16px 8px;
     text-align: center;
-    cursor: default;
 }
+
 .stat-card img {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     margin-bottom: 6px;
 }
+
 .stat-value {
-    font-size: 1.6em;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--accent);
 }
+
 .stat-label {
-    font-size: 0.75em;
+    font-size: 0.7rem;
     color: var(--text-secondary);
 }
 
@@ -125,35 +141,43 @@ body {
 ===================================================== */
 .filter-section {
     padding: 16px;
-    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
+
 .filter-section label {
-    font-size: 0.75em;
+    font-size: 0.75rem;
     color: var(--text-secondary);
-    display: block;
-    margin-bottom: 6px;
 }
+
 .filter-section select {
     width: 100%;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: none;
-    background: rgba(255,255,255,0.08);
-    color: var(--text-primary);
-    margin-bottom: 12px;
-}
-.filter-section button {
-    width: 100%;
-    padding: 12px;
+    padding: 10px 12px;
     border-radius: 12px;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: var(--text-primary);
+    appearance: none;
+    outline: none;
+}
+
+.filter-section button {
+    margin-top: 4px;
+    padding: 12px;
+    border-radius: 14px;
     border: none;
     background: var(--accent);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.3s ease, transform 0.2s ease;
 }
-.filter-section button:hover {
-    background: var(--accent-hover);
-    transform: translateY(-1px);
+
+/* =====================================================
+   SMALL SCREENS FIX
+===================================================== */
+@media (max-width: 360px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
 }

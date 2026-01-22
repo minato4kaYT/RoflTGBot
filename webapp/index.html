@@ -2,88 +2,81 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>EternalMod - Дашборд</title>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>EternalMod — Дашборд</title>
+
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
+
 <body>
-    <div class="background"></div>
-    
+<div class="app">
     <div class="container">
-        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
-            <span class="theme-icon">🌙</span>
-        </button>
-        
+
+        <!-- HEADER -->
         <header class="glass-header">
             <h1>🎭 EternalMod</h1>
             <p class="subtitle">Дашборд бизнес-сообщений</p>
         </header>
 
+        <!-- STATS -->
         <div class="stats-grid">
-            <div class="stat-card glass-card">
-                <div class="stat-icon">📊</div>
+            <div class="stat-card">
                 <div class="stat-value" id="totalMessages">0</div>
                 <div class="stat-label">Всего сообщений</div>
             </div>
-            
-            <div class="stat-card glass-card">
-                <div class="stat-icon">✏️</div>
+
+            <div class="stat-card">
                 <div class="stat-value" id="editedMessages">0</div>
                 <div class="stat-label">Изменено</div>
             </div>
-            
-            <div class="stat-card glass-card">
-                <div class="stat-icon">🗑️</div>
+
+            <div class="stat-card">
                 <div class="stat-value" id="deletedMessages">0</div>
                 <div class="stat-label">Удалено</div>
             </div>
         </div>
 
-        <div class="filters glass-card">
-            <h2>Фильтры</h2>
-            <div class="filter-group">
-                <label>Период:</label>
-                <select id="periodFilter" class="glass-input">
-                    <option value="all">Все время</option>
-                    <option value="today">Сегодня</option>
-                    <option value="week">Неделя</option>
-                    <option value="month">Месяц</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>Тип события:</label>
-                <select id="typeFilter" class="glass-input">
-                    <option value="all">Все</option>
-                    <option value="edited">Изменения</option>
-                    <option value="deleted">Удаления</option>
-                </select>
-            </div>
-            <button class="btn-glass" onclick="applyFilters()">Применить</button>
-        </div>
+        <!-- FILTERS -->
+        <section class="filter-section">
+            <label for="periodFilter">Период</label>
+            <select id="periodFilter">
+                <option value="all">Все время</option>
+                <option value="today">Сегодня</option>
+                <option value="week">Неделя</option>
+                <option value="month">Месяц</option>
+            </select>
 
-        <div class="export-section glass-card">
-            <h2>Экспорт данных</h2>
-            <div class="export-buttons">
-                <button class="btn-glass btn-export" onclick="exportData('csv')">
-                    📄 Экспорт CSV
-                </button>
-                <button class="btn-glass btn-export" onclick="exportData('json')">
-                    📦 Экспорт JSON
-                </button>
-                <button class="btn-glass btn-export" onclick="exportData('txt')">
-                    📝 Экспорт TXT
-                </button>
-            </div>
-        </div>
+            <label for="typeFilter">Тип события</label>
+            <select id="typeFilter">
+                <option value="all">Все</option>
+                <option value="edited">Изменения</option>
+                <option value="deleted">Удаления</option>
+            </select>
 
-        <div class="messages-list glass-card" id="messagesList">
-            <h2>История событий</h2>
-            <div class="loading" id="loading">Загрузка...</div>
+            <button onclick="applyFilters()">Применить</button>
+        </section>
+
+        <!-- EXPORT -->
+        <section class="glass-card" style="padding:16px;">
+            <p class="subtitle" style="margin-bottom:10px;">Экспорт данных</p>
+
+            <button onclick="exportData('csv')">📄 Экспорт CSV</button>
+            <button onclick="exportData('json')" style="margin-top:8px;">📦 Экспорт JSON</button>
+            <button onclick="exportData('txt')" style="margin-top:8px;">📝 Экспорт TXT</button>
+        </section>
+
+        <!-- HISTORY -->
+        <section class="glass-card" style="padding:16px;">
+            <p class="subtitle">История событий</p>
+            <div id="loading">Загрузка…</div>
             <div id="messagesContainer"></div>
-        </div>
-    </div>
+        </section>
 
-    <script src="app.js"></script>
+    </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
