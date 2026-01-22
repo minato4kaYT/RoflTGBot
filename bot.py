@@ -1085,7 +1085,7 @@ async def cmd_help(message: types.Message) -> None:
 
 async def cmd_about(message: types.Message) -> None:
     about_text = (
-        "🤖 <b>ROFL BOT</b>\n"
+        "🤖 <b>EternalMod</b>\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
 
         "🎯 <b>Назначение:</b>\n"
