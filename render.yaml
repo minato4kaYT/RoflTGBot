@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: rofl-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: REQUIRED_CHANNEL
+        sync: false
+      - key: REQUIRED_CHANNEL_URL
+        sync: false
+      - key: WEBAPP_URL
+        fromService:
+          type: web
+          name: rofl-bot
+          property: host

@@ -1,0 +1,17 @@
+[Unit]
+Description=ROFL Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=botuser
+WorkingDirectory=/home/botuser/rofl-bot
+Environment="PATH=/home/botuser/rofl-bot/venv/bin"
+ExecStart=/home/botuser/rofl-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
