@@ -20,6 +20,7 @@ from aiogram.types import (
     BusinessConnection,
     BusinessMessagesDeleted,
     BufferedInputFile,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -1646,20 +1647,43 @@ async def on_business_connection(
         return
 
     if connection.is_enabled and not can_reply:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "⚙️ Недостаточно разрешений.\n"
-                "Для работы дай боту полный доступ к сообщениям в Business Connection:\n"
-                "• Read messages\n"
-                "• Reply to messages\n"
-                "• Mark messages as read\n"
-                "• Delete sent messages\n"
-                "• Delete received messages\n"
-                "После выдачи прав заново подключи бота."
-            ),
-            reply_markup=MAIN_KEYBOARD,
-        )
+        # Путь к изображению с инструкцией по разрешениям
+        img_dir = Path(__file__).parent / "img"
+        # Пробуем разные варианты имени файла
+        permissions_image_path = None
+        for filename in ["permission.jpg", "permissions.png", "permission.png", "permissions.jpg"]:
+            path = img_dir / filename
+            if path.exists():
+                permissions_image_path = path
+                break
+        
+        text = "⚙️ Вы не выдали боту необходимый набор разрешений, поэтому он не может отвечать на команды"
+        
+        # Если изображение существует, отправляем с фото, иначе только текст
+        if permissions_image_path:
+            try:
+                photo = FSInputFile(permissions_image_path)
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=text,
+                    reply_markup=MAIN_KEYBOARD,
+                )
+            except Exception as e:
+                logging.warning(f"Failed to send permissions image: {e}")
+                # Fallback: отправляем только текст
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=MAIN_KEYBOARD,
+                )
+        else:
+            # Если изображения нет, отправляем только текст
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=MAIN_KEYBOARD,
+            )
         return
 
     if connection.is_enabled and can_reply:
