@@ -254,6 +254,21 @@ def get_prank_inline_kb() -> InlineKeyboardMarkup:
     )
 
 async def warn_about_new_bot_and_offer_report(message: types.Message):
+    if not message.from_user:
+        logging.info("[NEW_BOT] Нет from_user → пропуск")
+        return
+
+    logging.info(
+        f"[NEW_BOT] Проверка | chat={message.chat.id} | "
+        f"from={message.from_user.id} | "
+        f"is_bot={message.from_user.is_bot} | "
+        f"username=@{message.from_user.username or 'нет'}"
+    )
+
+    if not message.from_user.is_bot:
+        logging.info("[NEW_BOT] Не бот → пропуск")
+        return
+
     """
     Если сообщение от бота, которого видим впервые → отправляем владельцу чата
     предупреждение с текстом ровно как в запросе + кнопка "Отправить на проверку"
@@ -1686,6 +1701,9 @@ async def handle_echo(message: types.Message) -> None:
 
 
 async def on_edited_message(message: types.Message) -> None:
+    # ← Добавляем проверку нового бота здесь
+    await warn_about_new_bot_and_offer_report(message)
+
     key = (message.chat.id, message.message_id)
     old = MESSAGE_LOG.get(key)
     new_text = message.text or message.caption or "<без текста>"
@@ -1875,6 +1893,8 @@ async def on_business_message(message: types.Message) -> None:
         f"Business message received: chat_id={message.chat.id}, msg_id={message.message_id}, "
         f"bc_id={bc_id}, bc_in_logs={bc_id in BUSINESS_LOG_CHATS if bc_id else False}"
     )
+
+    await warn_about_new_bot_and_offer_report(message)
     remember_message(message)
     
     # Обрабатываем dot-команды в бизнес-чатах (для владельца бизнес-подключения) во всех чатах
@@ -2686,8 +2706,6 @@ async def main() -> None:
     dp.callback_query.register(on_callback_prank_zaebu, lambda c: c.data == "prank_zaebu")
     dp.callback_query.register(on_callback_check_sub, lambda c: c.data == "check_sub")
     dp.message.register(handle_echo)
-    dp.business_message.register(warn_about_new_bot_and_offer_report)
-    dp.edited_business_message.register(warn_about_new_bot_and_offer_report)
     dp.callback_query.register(
         on_report_new_bot,
         lambda c: c.data.startswith("report_new_bot_")
