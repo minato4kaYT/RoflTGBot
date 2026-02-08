@@ -254,61 +254,104 @@ def get_prank_inline_kb() -> InlineKeyboardMarkup:
     )
 
 async def warn_about_new_bot_and_offer_report(message: types.Message):
+    """
+    Проверяет, является ли отправитель (или форвард) ботом / подозрительным username.
+    Если да и впервые видим → отправляем предупреждение владельцу чата.
+    """
     if not message.from_user:
         logging.info("[NEW_BOT] Нет from_user → пропуск")
         return
 
+    # ──────────────────────────────
+    # Отладка — полезно оставить
+    # ──────────────────────────────
     fu = message.from_user
-    is_bot = fu.is_bot
-    username = fu.username or "нет"
-    full_name = fu.full_name or "нет"
-    text_preview = (message.text or message.caption or "нет текста")[:50]
-
     logging.info(
         f"[NEW_BOT] Детали | "
         f"chat={message.chat.id} | "
         f"from_id={fu.id} | "
-        f"is_bot={is_bot} | "
-        f"username=@{username} | "
-        f"name={full_name} | "
-        f"premium={fu.is_premium} | "
-        f"via_bot={getattr(message, 'via_bot', None)} | "
-        f"business_conn={getattr(message, 'business_connection_id', 'нет')} | "
-        f"text={text_preview!r}"
+        f"is_bot={fu.is_bot} | "
+        f"username=@{fu.username or 'нет'} | "
+        f"name={fu.full_name or 'нет'} | "
+        f"forward_from=@{message.forward_from.username if message.forward_from else 'нет'} | "
+        f"forward_name={message.forward_sender_name or 'нет'} | "
+        f"text={(message.text or 'нет текста')[:60]!r}"
     )
 
-    if not is_bot:
-        logging.info("[NEW_BOT] Не бот (is_bot=False) → пропуск")
+    # ──────────────────────────────
+    # Определяем кандидата на "бота"
+    # ──────────────────────────────
+    candidate_user = None
+    candidate_id = None
+    candidate_username = None
+    candidate_display = None
+
+    # 1. Прямое сообщение от бота
+    if fu.is_bot:
+        candidate_user = fu
+        candidate_id = fu.id
+        candidate_username = fu.username
+        candidate_display = f"@{fu.username}" if fu.username else f"ID {fu.id}"
+
+    # 2. Форвард от бота (самый частый сценарий скама)
+    elif message.forward_from and message.forward_from.is_bot:
+        candidate_user = message.forward_from
+        candidate_id = candidate_user.id
+        candidate_username = candidate_user.username
+        candidate_display = f"@{candidate_username}" if candidate_username else f"ID {candidate_id}"
+
+    # 3. Проверка по username отправителя (даже если is_bot=False)
+    # Это ловит случаи, когда человек пишет от имени бота или форвард скрыт
+    elif fu.username:
+        uname_lower = fu.username.lower()
+            # 3. Проверка по username отправителя (даже если is_bot=False)
+    elif fu.username:
+        uname_lower = fu.username.lower()
+        suspicious_patterns = ["_bot", "bot", "robot"]
+        
+        if any(p in uname_lower for p in suspicious_patterns):
+            candidate_id = fu.id
+            candidate_username = fu.username
+            candidate_display = f"@{fu.username} (подозрительный username)"
+            logging.info(f"[NEW_BOT] Обнаружен подозрительный username: @{fu.username}")
+
+    # 4. Скрытый форвард (forward_sender_name) — часто у скам-ботов
+    elif message.forward_sender_name:
+        name_lower = message.forward_sender_name.lower()
+        if any(p in name_lower for p in ["bot", "robot", "trust", "gift", "royal", "support"]):
+            # Нет надёжного ID → используем хэш от имени как ключ
+            candidate_id = f"hidden_{hash(message.forward_sender_name)}"
+            candidate_username = message.forward_sender_name.replace(" ", "_").lower()
+            candidate_display = f"{message.forward_sender_name} (скрытый форвард)"
+            logging.info(f"[NEW_BOT] Обнаружен подозрительный forward_sender_name: {message.forward_sender_name}")
+
+    # Если ничего не нашли — пропускаем
+    if not candidate_id:
+        logging.info("[NEW_BOT] Не бот, не подозрительный username и не форвард → пропуск")
         return
 
-    """
-    Если сообщение от бота, которого видим впервые → отправляем владельцу чата
-    предупреждение с текстом ровно как в запросе + кнопка "Отправить на проверку"
-    """
-    if not message.from_user or not message.from_user.is_bot:
-        return
-
-    bot_id = message.from_user.id
-    bot_username = message.from_user.username
-
-    # Уже видели этого бота?
-    _cur.execute("SELECT 1 FROM seen_bots WHERE bot_id = ?", (bot_id,))
+    # ──────────────────────────────
+    # Проверка в базе (по candidate_id)
+    # ──────────────────────────────
+    _cur.execute("SELECT 1 FROM seen_bots WHERE bot_id = ?", (candidate_id,))
     if _cur.fetchone():
+        logging.info(f"[NEW_BOT] Уже видели {candidate_display} → пропуск")
         return
 
-    # Новый бот → запоминаем
+    # Новый → запоминаем
     now = int(time.time())
     _cur.execute(
         "INSERT OR IGNORE INTO seen_bots (bot_id, first_seen_at, first_seen_chat) VALUES (?, ?, ?)",
-        (bot_id, now, message.chat.id)
+        (candidate_id, now, message.chat.id)
     )
     _db.commit()
+    logging.info(f"[NEW_BOT] Новый кандидат добавлен: {candidate_display}")
 
-    # Текст — ровно как ты написал
-    username_display = f"@{bot_username}" if bot_username else f"ID {bot_id}"
-
+    # ──────────────────────────────
+    # Отправляем предупреждение владельцу чата
+    # ──────────────────────────────
     warning_text = (
-        f"🤔 EternalMOD видит бота {username_display} впервые.\n\n"
+        f"🤔 EternalMOD видит бота {candidate_display} впервые.\n\n"
         f"Будьте аккуратны, если вам пишет незнакомый человек и "
         f"получить подарок/использовать его «гаранта».\n\n"
         f"Настоятельно рекомендуем обратиться в чат @savemod_chat и "
@@ -320,7 +363,7 @@ async def warn_about_new_bot_and_offer_report(message: types.Message):
         [
             InlineKeyboardButton(
                 text="Отправить на проверку",
-                callback_data=f"report_new_bot_{bot_id}_{message.chat.id}"
+                callback_data=f"report_new_bot_{candidate_id}_{message.chat.id}"
             )
         ]
     ])
@@ -331,10 +374,11 @@ async def warn_about_new_bot_and_offer_report(message: types.Message):
             text=warning_text,
             reply_markup=kb,
             disable_web_page_preview=True,
-            parse_mode=None   # без HTML/Markdown, чтобы кавычки и эмодзи отображались чисто
+            parse_mode=None
         )
+        logging.info(f"[NEW_BOT] Предупреждение отправлено в {message.chat.id}")
     except Exception as e:
-        logging.error(f"Не удалось отправить предупреждение в {message.chat.id}: {e}")
+        logging.error(f"[NEW_BOT] Ошибка отправки предупреждения: {e}")
 
 async def on_report_new_bot(callback: types.CallbackQuery):
     if not callback.data.startswith("report_new_bot_"):
