@@ -6,12 +6,12 @@ import random
 import io
 import re
 import time
-
 import hmac
 import hashlib
-from urllib.parse import parse_qsl
-
 import sqlite3
+
+from urllib.parse import parse_qsl
+from config import *
 
 DB_PATH = os.getenv("DB_PATH", "events.db")
 
@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS events (
     content TEXT,
     old_content TEXT,
     timestamp INTEGER
+)
+""")
+
+# Таблица для отслеживания ботов, которых видели впервые
+_cur.execute("""
+CREATE TABLE IF NOT EXISTS seen_bots (
+    bot_id          INTEGER PRIMARY KEY,          -- id бота (Telegram user id)
+    first_seen_at   INTEGER,                       -- unix timestamp первого появления
+    first_seen_chat INTEGER                        -- в каком чате (owner_id) впервые увидели
 )
 """)
 
@@ -244,6 +253,110 @@ def get_prank_inline_kb() -> InlineKeyboardMarkup:
         ]
     )
 
+async def warn_about_new_bot_and_offer_report(message: types.Message):
+    """
+    Если сообщение от бота, которого видим впервые → отправляем владельцу чата
+    предупреждение с текстом ровно как в запросе + кнопка "Отправить на проверку"
+    """
+    if not message.from_user or not message.from_user.is_bot:
+        return
+
+    bot_id = message.from_user.id
+    bot_username = message.from_user.username
+
+    # Уже видели этого бота?
+    _cur.execute("SELECT 1 FROM seen_bots WHERE bot_id = ?", (bot_id,))
+    if _cur.fetchone():
+        return
+
+    # Новый бот → запоминаем
+    now = int(time.time())
+    _cur.execute(
+        "INSERT OR IGNORE INTO seen_bots (bot_id, first_seen_at, first_seen_chat) VALUES (?, ?, ?)",
+        (bot_id, now, message.chat.id)
+    )
+    _db.commit()
+
+    # Текст — ровно как ты написал
+    username_display = f"@{bot_username}" if bot_username else f"ID {bot_id}"
+
+    warning_text = (
+        f"🤔 EternalMOD видит бота {username_display} впервые.\n\n"
+        f"Будьте аккуратны, если вам пишет незнакомый человек и "
+        f"получить подарок/использовать его «гаранта».\n\n"
+        f"Настоятельно рекомендуем обратиться в чат @savemod_chat и "
+        f"попросить помочь с данной ситуацией.\n\n"
+        f"Чтобы отправить бота на проверку команде EternalMOD, нажмите кнопку ниже."
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Отправить на проверку",
+                callback_data=f"report_new_bot_{bot_id}_{message.chat.id}"
+            )
+        ]
+    ])
+
+    try:
+        await message.bot.send_message(
+            chat_id=message.chat.id,
+            text=warning_text,
+            reply_markup=kb,
+            disable_web_page_preview=True,
+            parse_mode=None   # без HTML/Markdown, чтобы кавычки и эмодзи отображались чисто
+        )
+    except Exception as e:
+        logging.error(f"Не удалось отправить предупреждение в {message.chat.id}: {e}")
+
+async def on_report_new_bot(callback: types.CallbackQuery):
+    if not callback.data.startswith("report_new_bot_"):
+        return
+
+    parts = callback.data.split("_")
+    if len(parts) < 4:
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+
+    reported_bot_id = int(parts[3])
+    chat_id = int(parts[4])  # чат владельца
+
+    # Получаем информацию о боте (можно расширить)
+    bot_username = "неизвестно"
+    try:
+        bot_user = await callback.bot.get_chat(reported_bot_id)
+        bot_username = bot_user.username or f"ID {reported_bot_id}"
+    except:
+        pass
+
+    # Уведомление тебе (админу)
+    admin_text = (
+        f"📩 Новая проверка бота от пользователя {chat_id}\n\n"
+        f"Бот: @{bot_username} (ID: {reported_bot_id})\n"
+        f"Чат владельца: {chat_id}\n"
+        f"Время: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"Дальше решай сам: безопасен / скам / забанить и т.д."
+    )
+
+    # Можно добавить кнопки, если хочешь автоматизировать решение
+    # admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+    #     [
+    #         InlineKeyboardButton("Одобрить", callback_data=f"approve_bot_{reported_bot_id}_{chat_id}"),
+    #         InlineKeyboardButton("Скам / Заблокировать", callback_data=f"block_bot_{reported_bot_id}_{chat_id}"),
+    #     ]
+    # ])
+
+    try:
+        await callback.bot.send_message(
+            OWNER_ID,
+            admin_text,
+            # reply_markup=admin_kb,   # раскомментируй, если нужны кнопки
+            disable_web_page_preview=True
+        )
+        await callback.answer("Бот отправлен на проверку!")
+    except Exception as e:
+        logging.error(f"Ошибка отправки админу: {e}")
+        await callback.answer("Не удалось отправить на проверку", show_alert=True)
 
 async def cmd_prank_menu(message: types.Message) -> None:
     if not await require_subscription_message(message):
@@ -613,7 +726,7 @@ BUSINESS_LOG_CHATS: Dict[str, Dict[str, int]] = {}
 BUSINESS_CONNECTIONS_FILE = "business_connections.json"
 # Для отслеживания последнего уведомления о подписке (чтобы не спамить)
 # owner_id -> timestamp последнего уведомления
-LAST_SUBSCRIPTION_NOTIFICATION: Dict[int, float] = {}
+LAST_SUBSCRIPTION_NOTIFICATION: Dict[int, float] = {} 
 SUBSCRIPTION_NOTIFICATION_COOLDOWN = 3600  # 1 час в секундах
 # История событий для мини-приложения: owner_id -> List[Dict]
 EVENTS_HISTORY: Dict[int, List[Dict[str, Any]]] = {}
@@ -2573,6 +2686,12 @@ async def main() -> None:
     dp.callback_query.register(on_callback_prank_zaebu, lambda c: c.data == "prank_zaebu")
     dp.callback_query.register(on_callback_check_sub, lambda c: c.data == "check_sub")
     dp.message.register(handle_echo)
+    dp.business_message.register(warn_about_new_bot_and_offer_report)
+    dp.edited_business_message.register(warn_about_new_bot_and_offer_report)
+    dp.callback_query.register(
+        on_report_new_bot,
+        lambda c: c.data.startswith("report_new_bot_")
+    )
 
     await set_commands(bot)
     logging.info("Bot starting polling...")
