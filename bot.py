@@ -258,15 +258,27 @@ async def warn_about_new_bot_and_offer_report(message: types.Message):
         logging.info("[NEW_BOT] Нет from_user → пропуск")
         return
 
+    fu = message.from_user
+    is_bot = fu.is_bot
+    username = fu.username or "нет"
+    full_name = fu.full_name or "нет"
+    text_preview = (message.text or message.caption or "нет текста")[:50]
+
     logging.info(
-        f"[NEW_BOT] Проверка | chat={message.chat.id} | "
-        f"from={message.from_user.id} | "
-        f"is_bot={message.from_user.is_bot} | "
-        f"username=@{message.from_user.username or 'нет'}"
+        f"[NEW_BOT] Детали | "
+        f"chat={message.chat.id} | "
+        f"from_id={fu.id} | "
+        f"is_bot={is_bot} | "
+        f"username=@{username} | "
+        f"name={full_name} | "
+        f"premium={fu.is_premium} | "
+        f"via_bot={getattr(message, 'via_bot', None)} | "
+        f"business_conn={getattr(message, 'business_connection_id', 'нет')} | "
+        f"text={text_preview!r}"
     )
 
-    if not message.from_user.is_bot:
-        logging.info("[NEW_BOT] Не бот → пропуск")
+    if not is_bot:
+        logging.info("[NEW_BOT] Не бот (is_bot=False) → пропуск")
         return
 
     """
