@@ -12,8 +12,8 @@ OWNER_ID = int(os.getenv("OWNER_ID", "6059673725"))
 
 # Подписка на канал для доступа к боту (укажи @username или числовой chat_id канала).
 # Канал должен быть публичным или бот должен иметь доступ к нему, иначе проверка не сработает.
-REQUIRED_CHANNEL = os.getenv("REQUIRED_CHANNEL", "@qqgram_news")
-REQUIRED_CHANNEL_URL = os.getenv("REQUIRED_CHANNEL_URL", "https://t.me/qqgram_news")
+REQUIRED_CHANNEL = os.getenv("REQUIRED_CHANNEL", "@eternalmod_news")
+REQUIRED_CHANNEL_URL = os.getenv("REQUIRED_CHANNEL_URL", "https://t.me/eternalmod_news")
 
 # URL мини-приложения (веб-приложения) для Telegram
 # Для продакшена укажите ваш домен (Railway автоматически создаст URL)
