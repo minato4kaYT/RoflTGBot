@@ -4,7 +4,7 @@ import os
 # Для публичных репозиториев используйте переменные окружения на хостинге
 
 # Токен бота (приоритет: переменная окружения BOT_TOKEN, затем значение ниже)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8528327165:AAEvpOLcFBp3wKOsoUArisSHACCS1_iKjo8")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8362283625:AAGXLqfe65n7-Y-pYCMt1NPWrCKQgifFy-I")
 
 # ID твоего аккаунта (число). Сюда будут приходить логи об изменениях/удалениях и бизнес-события.
 # Узнать можно, написав /start любому "whoami" боту или через @userinfobot.
