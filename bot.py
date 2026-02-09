@@ -2585,7 +2585,6 @@ async def on_callback_check_sub(callback: types.CallbackQuery) -> None:
         await callback.message.answer("❌ Подписка не найдена. Подпишись и попробуй снова.", reply_markup=SUBSCRIBE_KB)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("report_new_bot_"))
 async def on_report_new_bot(callback: types.CallbackQuery):
     """Когда юзер жмёт "Отправить на проверку" — тебе приходит сообщение с кнопками"""
     parts = callback.data.split("_")
@@ -2629,8 +2628,6 @@ async def on_report_new_bot(callback: types.CallbackQuery):
     except Exception as e:
         await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
 
-
-@dp.callback_query(lambda c: c.data.startswith("approve_bot_"))
 async def on_approve_bot(callback: types.CallbackQuery):
     if callback.from_user.id != OWNER_ID:
         await callback.answer("Только владелец может решать", show_alert=True)
@@ -2656,8 +2653,6 @@ async def on_approve_bot(callback: types.CallbackQuery):
     )
     await callback.answer("Одобрено!")
 
-
-@dp.callback_query(lambda c: c.data.startswith("mark_scam_"))
 async def on_mark_scam(callback: types.CallbackQuery):
     if callback.from_user.id != OWNER_ID:
         await callback.answer("Только владелец может решать", show_alert=True)
@@ -2686,8 +2681,6 @@ async def on_mark_scam(callback: types.CallbackQuery):
     )
     await callback.answer("Помечен как скам!")
 
-
-@dp.callback_query(lambda c: c.data.startswith("ignore_bot_"))
 async def on_ignore_bot(callback: types.CallbackQuery):
     if callback.from_user.id != OWNER_ID:
         await callback.answer("Только владелец может решать", show_alert=True)
