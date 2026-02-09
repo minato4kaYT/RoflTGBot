@@ -2854,7 +2854,7 @@ async def main() -> None:
     dp.callback_query.register(on_callback_prank_zaebu, lambda c: c.data == "prank_zaebu")
     dp.callback_query.register(on_callback_check_sub, lambda c: c.data == "check_sub")
 
-    # ← твои новые обработчики (оставляем только один раз каждый)
+    # ← твои новые обработчики (только один раз каждый)
     dp.callback_query.register(on_report_new_bot, lambda c: c.data.startswith("report_new_bot_"))
     dp.callback_query.register(on_approve_bot,    lambda c: c.data.startswith("approve_bot_"))
     dp.callback_query.register(on_mark_scam,      lambda c: c.data.startswith("mark_scam_"))
