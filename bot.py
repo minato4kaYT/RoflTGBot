@@ -40,6 +40,15 @@ CREATE TABLE IF NOT EXISTS seen_bots (
 )
 """)
 
+_cur.execute("""
+CREATE TABLE IF NOT EXISTS scam_bots (
+    bot_id TEXT PRIMARY KEY,
+    reason TEXT,
+    added_by INTEGER,
+    added_at INTEGER
+)
+""")
+
 _db.commit()
 
 from html import escape
@@ -255,130 +264,90 @@ def get_prank_inline_kb() -> InlineKeyboardMarkup:
 
 async def warn_about_new_bot_and_offer_report(message: types.Message):
     """
-    Проверяет, является ли отправитель (или форвард) ботом / подозрительным username.
-    Если да и впервые видим → отправляем предупреждение владельцу чата.
+    Проверяет упоминания / сообщения от ботов / форварды.
+    Если новый → отправляет предупреждение владельцу чата с кнопкой "Отправить на проверку".
     """
     if not message.from_user:
-        logging.info("[NEW_BOT] Нет from_user → пропуск")
         return
 
-    # ──────────────────────────────
-    # Отладка — полезно оставить
-    # ──────────────────────────────
-    fu = message.from_user
-    logging.info(
-        f"[NEW_BOT] Детали | "
-        f"chat={message.chat.id} | "
-        f"from_id={fu.id} | "
-        f"is_bot={fu.is_bot} | "
-        f"username=@{fu.username or 'нет'} | "
-        f"name={fu.full_name or 'нет'} | "
-        f"forward_from=@{message.forward_from.username if message.forward_from else 'нет'} | "
-        f"forward_name={message.forward_sender_name or 'нет'} | "
-        f"text={(message.text or 'нет текста')[:60]!r}"
-    )
-
-    # ──────────────────────────────
-    # Определяем кандидата на "бота"
-    # ──────────────────────────────
-    candidate_user = None
-    candidate_id = None
-    candidate_username = None
-    candidate_display = None
+    # ─── Собираем кандидатов на "бот" ───
+    bot_candidates = set()  # username в нижнем регистре
 
     # 1. Прямое сообщение от бота
-    if fu.is_bot:
-        candidate_user = fu
-        candidate_id = fu.id
-        candidate_username = fu.username
-        candidate_display = f"@{fu.username}" if fu.username else f"ID {fu.id}"
+    if message.from_user.is_bot and message.from_user.username:
+        bot_candidates.add(message.from_user.username.lower())
 
-    # 2. Форвард от бота (самый частый сценарий скама)
-    elif message.forward_from and message.forward_from.is_bot:
-        candidate_user = message.forward_from
-        candidate_id = candidate_user.id
-        candidate_username = candidate_user.username
-        candidate_display = f"@{candidate_username}" if candidate_username else f"ID {candidate_id}"
+    # 2. Форвард от бота (если профиль не скрыт)
+    if message.forward_from and message.forward_from.is_bot and message.forward_from.username:
+        bot_candidates.add(message.forward_from.username.lower())
 
-    # 3. Проверка по username отправителя (даже если is_bot=False)
-    # Это ловит случаи, когда человек пишет от имени бота или форвард скрыт
-    elif fu.username:
-        uname_lower = fu.username.lower()
-            # 3. Проверка по username отправителя (даже если is_bot=False)
-    elif fu.username:
-        uname_lower = fu.username.lower()
-        suspicious_patterns = ["_bot", "bot", "robot"]
-        
-        if any(p in uname_lower for p in suspicious_patterns):
-            candidate_id = fu.id
-            candidate_username = fu.username
-            candidate_display = f"@{fu.username} (подозрительный username)"
-            logging.info(f"[NEW_BOT] Обнаружен подозрительный username: @{fu.username}")
+    # 3. Упоминания в тексте (@name_bot, @name_robot, @name_bot_)
+    if message.text or message.caption:
+        text = message.text or message.caption or ""
+        mentions = re.findall(r'@([a-zA-Z0-9_]{5,32}(?:_?bot|_?robot))\b', text, re.IGNORECASE)
+        for m in mentions:
+            bot_candidates.add(m.lower())
 
-    # 4. Скрытый форвард (forward_sender_name) — часто у скам-ботов
-    elif message.forward_sender_name:
+    # 4. Скрытый форвард (имя содержит bot/robot)
+    if message.forward_sender_name:
         name_lower = message.forward_sender_name.lower()
-        if any(p in name_lower for p in ["bot", "robot", "trust", "gift", "royal", "support"]):
-            # Нет надёжного ID → используем хэш от имени как ключ
-            candidate_id = f"hidden_{hash(message.forward_sender_name)}"
-            candidate_username = message.forward_sender_name.replace(" ", "_").lower()
-            candidate_display = f"{message.forward_sender_name} (скрытый форвард)"
-            logging.info(f"[NEW_BOT] Обнаружен подозрительный forward_sender_name: {message.forward_sender_name}")
+        if "bot" in name_lower or "robot" in name_lower:
+            pseudo = name_lower.replace(" ", "_").replace(".", "")
+            if pseudo.endswith(("bot", "robot")):
+                bot_candidates.add(pseudo)
 
-    # Если ничего не нашли — пропускаем
-    if not candidate_id:
-        logging.info("[NEW_BOT] Не бот, не подозрительный username и не форвард → пропуск")
+    if not bot_candidates:
         return
 
-    # ──────────────────────────────
-    # Проверка в базе (по candidate_id)
-    # ──────────────────────────────
-    _cur.execute("SELECT 1 FROM seen_bots WHERE bot_id = ?", (candidate_id,))
-    if _cur.fetchone():
-        logging.info(f"[NEW_BOT] Уже видели {candidate_display} → пропуск")
-        return
+    # ─── Обрабатываем каждого нового кандидата ───
+    for uname_lower in bot_candidates:
+        key = f"bot_{uname_lower}"
 
-    # Новый → запоминаем
-    now = int(time.time())
-    _cur.execute(
-        "INSERT OR IGNORE INTO seen_bots (bot_id, first_seen_at, first_seen_chat) VALUES (?, ?, ?)",
-        (candidate_id, now, message.chat.id)
-    )
-    _db.commit()
-    logging.info(f"[NEW_BOT] Новый кандидат добавлен: {candidate_display}")
+        # Уже видели?
+        _cur.execute("SELECT 1 FROM seen_bots WHERE bot_id = ?", (key,))
+        if _cur.fetchone():
+            continue
 
-    # ──────────────────────────────
-    # Отправляем предупреждение владельцу чата
-    # ──────────────────────────────
-    warning_text = (
-        f"🤔 EternalMOD видит бота {candidate_display} впервые.\n\n"
-        f"Будьте аккуратны, если вам пишет незнакомый человек и "
-        f"получить подарок/использовать его «гаранта».\n\n"
-        f"Настоятельно рекомендуем обратиться в чат @savemod_chat и "
-        f"попросить помочь с данной ситуацией.\n\n"
-        f"Чтобы отправить бота на проверку команде EternalMOD, нажмите кнопку ниже."
-    )
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Отправить на проверку",
-                callback_data=f"report_new_bot_{candidate_id}_{message.chat.id}"
-            )
-        ]
-    ])
-
-    try:
-        await message.bot.send_message(
-            chat_id=message.chat.id,
-            text=warning_text,
-            reply_markup=kb,
-            disable_web_page_preview=True,
-            parse_mode=None
+        # Новый → запоминаем
+        now = int(time.time())
+        _cur.execute(
+            "INSERT OR IGNORE INTO seen_bots (bot_id, first_seen_at, first_seen_chat) VALUES (?, ?, ?)",
+            (key, now, message.chat.id)
         )
-        logging.info(f"[NEW_BOT] Предупреждение отправлено в {message.chat.id}")
-    except Exception as e:
-        logging.error(f"[NEW_BOT] Ошибка отправки предупреждения: {e}")
+        _db.commit()
+
+        display_name = f"@{uname_lower.lstrip('@')}"
+        if uname_lower.startswith("bot_"):
+            display_name = f"@{uname_lower[4:]} (найден в сообщении)"
+
+        warning_text = (
+            f"🤔 EternalMOD видит бота {display_name} впервые.\n\n"
+            f"Будьте аккуратны, если вам пишет незнакомый человек и "
+            f"получить подарок/использовать его «гаранта».\n\n"
+            f"Настоятельно рекомендуем обратиться в чат @savemod_chat и "
+            f"попросить помочь с данной ситуацией.\n\n"
+            f"Чтобы отправить бота на проверку команде EternalMOD, нажмите кнопку ниже."
+        )
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Отправить на проверку",
+                    callback_data=f"report_new_bot_{key}_{message.chat.id}"
+                )
+            ]
+        ])
+
+        try:
+            await message.bot.send_message(
+                chat_id=message.chat.id,
+                text=warning_text,
+                reply_markup=kb,
+                disable_web_page_preview=True,
+                parse_mode=None
+            )
+        except Exception as e:
+            logging.error(f"Ошибка отправки предупреждения в {message.chat.id}: {e}")
 
 async def on_report_new_bot(callback: types.CallbackQuery):
     if not callback.data.startswith("report_new_bot_"):
@@ -2597,6 +2566,123 @@ async def on_callback_check_sub(callback: types.CallbackQuery) -> None:
         await callback.message.answer("❌ Подписка не найдена. Подпишись и попробуй снова.", reply_markup=SUBSCRIBE_KB)
     await callback.answer()
 
+@dp.callback_query(lambda c: c.data.startswith("report_new_bot_"))
+async def on_report_new_bot(callback: types.CallbackQuery):
+    """Когда юзер жмёт "Отправить на проверку" — тебе приходит сообщение с кнопками"""
+    parts = callback.data.split("_")
+    if len(parts) < 4:
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+
+    bot_key = parts[3]          # bot_royaltrust_robot или mention_...
+    chat_id = int(parts[4])     # чат владельца
+
+    # Достаём читаемое имя из ключа
+    bot_display = bot_key.replace("bot_", "@").replace("mention_", "@")
+
+    admin_text = (
+        f"📩 Новая проверка бота от пользователя {chat_id}\n\n"
+        f"Бот: {bot_display}\n"
+        f"Ключ в БД: {bot_key}\n"
+        f"Чат владельца: {chat_id}\n"
+        f"Время: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"Что делать?"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton("✅ Одобрить", callback_data=f"approve_bot_{bot_key}_{chat_id}"),
+            InlineKeyboardButton("🚫 Скам",     callback_data=f"mark_scam_{bot_key}_{chat_id}"),
+        ],
+        [
+            InlineKeyboardButton("❌ Игнорировать", callback_data=f"ignore_bot_{bot_key}_{chat_id}"),
+        ]
+    ])
+
+    try:
+        await callback.bot.send_message(
+            chat_id=OWNER_ID,
+            text=admin_text,
+            reply_markup=kb,
+            disable_web_page_preview=True
+        )
+        await callback.answer("Бот отправлен на проверку владельцу!")
+    except Exception as e:
+        await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
+
+
+@dp.callback_query(lambda c: c.data.startswith("approve_bot_"))
+async def on_approve_bot(callback: types.CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("Только владелец может решать", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    bot_key = parts[2]
+    chat_id = int(parts[3])
+
+    # Удаляем из seen_bots — больше предупреждений не будет
+    _cur.execute("DELETE FROM seen_bots WHERE bot_id = ?", (bot_key,))
+    _db.commit()
+
+    # Уведомляем владельца чата
+    await callback.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Бот {bot_key.replace('bot_', '@').replace('mention_', '@')} одобрен владельцем — безопасен."
+    )
+
+    # Редактируем сообщение у админа
+    await callback.message.edit_text(
+        callback.message.text + "\n\n✅ Одобрено владельцем"
+    )
+    await callback.answer("Одобрено!")
+
+
+@dp.callback_query(lambda c: c.data.startswith("mark_scam_"))
+async def on_mark_scam(callback: types.CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("Только владелец может решать", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    bot_key = parts[2]
+    chat_id = int(parts[3])
+
+    # Добавляем в scam_bots
+    _cur.execute(
+        "INSERT OR REPLACE INTO scam_bots (bot_id, reason, added_by, added_at) VALUES (?, ?, ?, ?)",
+        (bot_key, "Помечен как скам владельцем", OWNER_ID, int(time.time()))
+    )
+    _db.commit()
+
+    # Уведомляем владельца чата
+    await callback.bot.send_message(
+        chat_id=chat_id,
+        text=f"🚫 Бот {bot_key.replace('bot_', '@').replace('mention_', '@')} помечен как **скам**! Не взаимодействуйте."
+    )
+
+    # Редактируем сообщение у админа
+    await callback.message.edit_text(
+        callback.message.text + "\n\n🚫 Помечен как скам"
+    )
+    await callback.answer("Помечен как скам!")
+
+
+@dp.callback_query(lambda c: c.data.startswith("ignore_bot_"))
+async def on_ignore_bot(callback: types.CallbackQuery):
+    if callback.from_user.id != OWNER_ID:
+        await callback.answer("Только владелец может решать", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    bot_key = parts[2]
+    chat_id = int(parts[3])
+
+    # Редактируем сообщение у админа
+    await callback.message.edit_text(
+        callback.message.text + "\n\n❌ Игнорировано владельцем"
+    )
+    await callback.answer("Игнорировано")
 
 # HTTP сервер для мини-приложения
 async def api_messages_handler(request: web.Request) -> web.Response:
@@ -2761,6 +2847,10 @@ async def main() -> None:
     dp.callback_query.register(on_callback_prank_info, lambda c: c.data == "prank_info")
     dp.callback_query.register(on_callback_prank_zaebu, lambda c: c.data == "prank_zaebu")
     dp.callback_query.register(on_callback_check_sub, lambda c: c.data == "check_sub")
+    dp.callback_query.register(on_report_new_bot, lambda c: c.data.startswith("report_new_bot_"))
+    dp.callback_query.register(on_approve_bot, lambda c: c.data.startswith("approve_bot_"))
+    dp.callback_query.register(on_mark_scam,    lambda c: c.data.startswith("mark_scam_"))
+    dp.callback_query.register(on_ignore_bot,   lambda c: c.data.startswith("ignore_bot_"))
     dp.message.register(handle_echo)
     dp.callback_query.register(
         on_report_new_bot,
