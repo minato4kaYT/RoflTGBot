@@ -264,24 +264,37 @@ def get_prank_inline_kb() -> InlineKeyboardMarkup:
 
 async def warn_about_new_bot_and_offer_report(message: types.Message):
     """
-    Проверяет упоминания / сообщения от ботов / форварды.
-    Если новый → отправляет предупреждение владельцу чата с кнопкой "Отправить на проверку".
+    Проверяет, упоминается ли / отправляет ли сообщение бот впервые.
+    Если да — отправляет предупреждение В ТОТ ЖЕ ЧАТ (бизнес-чат клиента).
     """
     if not message.from_user:
+        logging.info("[NEW_BOT] Нет from_user → пропуск")
         return
 
-    # ─── Собираем кандидатов на "бот" ───
-    bot_candidates = set()  # username в нижнем регистре
+    # Отладка — куда именно отправляем
+    logging.info(
+        f"[NEW_BOT] Проверка | "
+        f"chat_id={message.chat.id} | "
+        f"chat_type={message.chat.type} | "
+        f"business_conn={getattr(message, 'business_connection_id', 'нет')} | "
+        f"from_id={message.from_user.id} | "
+        f"is_bot={message.from_user.is_bot} | "
+        f"username=@{message.from_user.username or 'нет'} | "
+        f"text={(message.text or message.caption or 'нет текста')[:80]!r}"
+    )
+
+    # Собираем кандидатов на "бот" (username в нижнем регистре)
+    bot_candidates = set()
 
     # 1. Прямое сообщение от бота
     if message.from_user.is_bot and message.from_user.username:
         bot_candidates.add(message.from_user.username.lower())
 
-    # 2. Форвард от бота (если профиль не скрыт)
+    # 2. Форвард от бота
     if message.forward_from and message.forward_from.is_bot and message.forward_from.username:
         bot_candidates.add(message.forward_from.username.lower())
 
-    # 3. Упоминания в тексте (@name_bot, @name_robot, @name_bot_)
+    # 3. Упоминания в тексте (@name_bot / @name_robot / @name_bot_)
     if message.text or message.caption:
         text = message.text or message.caption or ""
         mentions = re.findall(r'@([a-zA-Z0-9_]{5,32}(?:_?bot|_?robot))\b', text, re.IGNORECASE)
@@ -297,15 +310,17 @@ async def warn_about_new_bot_and_offer_report(message: types.Message):
                 bot_candidates.add(pseudo)
 
     if not bot_candidates:
+        logging.info("[NEW_BOT] Кандидаты не найдены → пропуск")
         return
 
-    # ─── Обрабатываем каждого нового кандидата ───
+    # Обрабатываем каждого нового
     for uname_lower in bot_candidates:
         key = f"bot_{uname_lower}"
 
         # Уже видели?
         _cur.execute("SELECT 1 FROM seen_bots WHERE bot_id = ?", (key,))
         if _cur.fetchone():
+            logging.info(f"[NEW_BOT] Уже видели {uname_lower} → пропуск")
             continue
 
         # Новый → запоминаем
@@ -316,6 +331,9 @@ async def warn_about_new_bot_and_offer_report(message: types.Message):
         )
         _db.commit()
 
+        logging.info(f"[NEW_BOT] Новый бот добавлен в БД: {uname_lower}")
+
+        # Отображаемое имя
         display_name = f"@{uname_lower.lstrip('@')}"
         if uname_lower.startswith("bot_"):
             display_name = f"@{uname_lower[4:]} (найден в сообщении)"
@@ -340,14 +358,15 @@ async def warn_about_new_bot_and_offer_report(message: types.Message):
 
         try:
             await message.bot.send_message(
-                chat_id=message.chat.id,
+                chat_id=message.chat.id,           # ← именно сюда пришло сообщение
                 text=warning_text,
                 reply_markup=kb,
                 disable_web_page_preview=True,
                 parse_mode=None
             )
+            logging.info(f"[NEW_BOT] Предупреждение успешно отправлено в чат {message.chat.id}")
         except Exception as e:
-            logging.error(f"Ошибка отправки предупреждения в {message.chat.id}: {e}")
+            logging.error(f"[NEW_BOT] Ошибка отправки в чат {message.chat.id}: {e}")
 
 async def on_report_new_bot(callback: types.CallbackQuery):
     if not callback.data.startswith("report_new_bot_"):
@@ -2810,19 +2829,6 @@ async def main() -> None:
     )
     dp = Dispatcher()
 
-    dp.message.register(cmd_start, Command("start"))
-    dp.message.register(cmd_help, Command("help"))
-    dp.message.register(cmd_rofl, Command("rofl"))
-    dp.message.register(cmd_mock, Command("mock"))
-    dp.message.register(cmd_coin, Command("coin"))
-    dp.message.register(cmd_instruction, Command("instruction"))
-    dp.message.register(cmd_commands_description, Command("commands"))
-    dp.message.register(cmd_about, Command("about"))
-    dp.business_message.register(on_business_message)
-    dp.edited_business_message.register(on_edited_message)
-    dp.business_connection.register(on_business_connection)
-    dp.edited_message.register(on_edited_message)
-    dp.deleted_business_messages.register(on_deleted_business_messages)
     dp.callback_query.register(on_callback_rofl, lambda c: c.data == "more_rofl")
     dp.callback_query.register(on_callback_dark_rofl, lambda c: c.data == "dark_rofl")
     dp.callback_query.register(on_callback_more_dark_rofl, lambda c: c.data == "more_dark_rofl")
@@ -2847,15 +2853,14 @@ async def main() -> None:
     dp.callback_query.register(on_callback_prank_info, lambda c: c.data == "prank_info")
     dp.callback_query.register(on_callback_prank_zaebu, lambda c: c.data == "prank_zaebu")
     dp.callback_query.register(on_callback_check_sub, lambda c: c.data == "check_sub")
+
+    # ← твои новые обработчики (оставляем только один раз каждый)
     dp.callback_query.register(on_report_new_bot, lambda c: c.data.startswith("report_new_bot_"))
-    dp.callback_query.register(on_approve_bot, lambda c: c.data.startswith("approve_bot_"))
-    dp.callback_query.register(on_mark_scam,    lambda c: c.data.startswith("mark_scam_"))
-    dp.callback_query.register(on_ignore_bot,   lambda c: c.data.startswith("ignore_bot_"))
+    dp.callback_query.register(on_approve_bot,    lambda c: c.data.startswith("approve_bot_"))
+    dp.callback_query.register(on_mark_scam,      lambda c: c.data.startswith("mark_scam_"))
+    dp.callback_query.register(on_ignore_bot,     lambda c: c.data.startswith("ignore_bot_"))
+
     dp.message.register(handle_echo)
-    dp.callback_query.register(
-        on_report_new_bot,
-        lambda c: c.data.startswith("report_new_bot_")
-    )
 
     await set_commands(bot)
     logging.info("Bot starting polling...")
